@@ -2,7 +2,12 @@
 
 namespace Jascha030\ComposerTemplate\Container;
 
-class HookableContainerInterface
-{
+use Psr\Container\ContainerInterface;
 
+interface HookableStoreInterface extends ContainerInterface
+{
+    /**
+     * @return string[]
+     */
+    public function getBoundClassNames(): array;
 }
