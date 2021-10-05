@@ -2,7 +2,9 @@
 
 namespace Jascha030\ComposerTemplate\Hookable;
 
-class HookableInterface
+interface HookableInterface
 {
+    public static function getActionHooks(): array;
 
+    public static function getFilterHooks(): array;
 }
