@@ -3,6 +3,7 @@
 namespace Jascha030\ComposerTemplate\Registry;
 
 use Jascha030\ComposerTemplate\Container\HookableStoreInterface;
+use Jascha030\ComposerTemplate\Exception\Hookable\DoesNotImplementHookableInterfaceException;
 use Jascha030\ComposerTemplate\Hookable\HookableInterface;
 
 class PluginRegistry
@@ -37,15 +38,13 @@ class PluginRegistry
      */
     private function injectHookableMethods(string $hookableClassName): void
     {
-        if (! is_subclass_of($hookableClassName, HookableInterface::class)) {
-            $interface = HookableInterface::class;
-
-            throw new \Exception("Class \"{$hookableClassName}\" does not implement \"{$interface}\".");
+        if (!is_subclass_of($hookableClassName, HookableInterface::class)) {
+            throw new DoesNotImplementHookableInterfaceException($hookableClassName);
         }
 
         $hooks = [
             'add_action' => $hookableClassName::getActionHooks(),
-            'add_filter' => $hookableClassName::getFilterHooks()
+            'add_filter' => $hookableClassName::getFilterHooks(),
         ];
 
         foreach ($hooks as $additionMethod => $hooksToInject) {
