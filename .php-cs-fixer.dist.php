@@ -80,6 +80,7 @@ return $config->setRiskyAllowed(true)->setRules([
     'line_ending'                                   => true,
     'linebreak_after_opening_tag'                   => true,
     'logical_operators'                             => true,
+    'not_operator_with_successor_space'             => true,
     'lowercase_cast'                                => true,
     'lowercase_keywords'                            => true,
     'lowercase_static_reference'                    => true,
