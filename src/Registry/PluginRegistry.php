@@ -2,11 +2,17 @@
 
 namespace Jascha030\ComposerTemplate\Registry;
 
+use Exception;
 use Jascha030\ComposerTemplate\Container\HookableStoreInterface;
 use Jascha030\ComposerTemplate\Exception\Hookable\DoesNotImplementHookableInterfaceException;
+use Jascha030\ComposerTemplate\Exception\Wordpress\MissingWordpressFunctionsException;
 use Jascha030\ComposerTemplate\Hookable\HookableInterface;
 
-class PluginRegistry
+/**
+ * Inject statically defined Hookable methods by wrapping the hooks in closures, which, in turn retrieve the
+ * executing class from its own Container implementing HookableStoreInterface.
+ */
+final class PluginRegistry
 {
     private HookableStoreInterface $hookablesContainer;
 
@@ -16,7 +22,7 @@ class PluginRegistry
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
     public function run(): void
     {
@@ -24,21 +30,21 @@ class PluginRegistry
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
-    private function injectHookables(): void
+    public function injectHookables(): void
     {
         foreach ($this->hookablesContainer->getBoundClassNames() as $hookableClassName) {
-            $this->injectHookableMethods($hookableClassName);
+            $this->injectHookable($hookableClassName);
         }
     }
 
     /**
-     * @throws \Exception
+     * @throws Exception
      */
-    private function injectHookableMethods(string $hookableClassName): void
+    private function injectHookable(string $hookableClassName): void
     {
-        if (!is_subclass_of($hookableClassName, HookableInterface::class)) {
+        if (! is_subclass_of($hookableClassName, HookableInterface::class)) {
             throw new DoesNotImplementHookableInterfaceException($hookableClassName);
         }
 
@@ -48,48 +54,63 @@ class PluginRegistry
         ];
 
         foreach ($hooks as $additionMethod => $hooksToInject) {
-            foreach ($hooksToInject as $tag => $parameters) {
-                // Check if single or multiple methods are added to hook.
-                if (\is_array($parameters) && \is_array($parameters[0])) {
-                    foreach ($parameters as $params) {
-                        // multiple hooked methods.
-                        if (!\is_array($params)) {
-                            $params = [$params];
-                        }
-
-                        $this->injectFilterWithHookableMethod($additionMethod, $tag, $hookableClassName, ...$params);
-                    }
-
-                    continue;
-                }
-
-                // single hooked method.
-                if (!\is_array($parameters)) {
-                    $parameters = [$parameters];
-                }
-
-                $this->injectFilterWithHookableMethod($additionMethod, $tag, $hookableClassName, ...$parameters);
-            }
+            $this->injectHookableMethods($additionMethod, $hooksToInject, $hookableClassName);
         }
     }
 
-    private function injectFilterWithHookableMethod(
-        string $additionMethod,
-        string $tag,
-        string $hookableClassname,
-        string $hookableClassMethod,
-        int $prio = 10,
-        int $args = 1
-    ): void {
-        $closure = $this->wrapHook($hookableClassname, $hookableClassMethod);
+    private function injectHookableMethods(string $method, array $hooks, string $hookableClassName): void
+    {
+        foreach ($hooks as $tag => $parameters) {
+            if ($this->hooksMultipleMethods($parameters)) {
+                // Multiple hook definitions are bound to current filter.
+                foreach ($parameters as $params) {
+                    $params = (! \is_array($params)) ? [$params] : $params;
 
-        $additionMethod($tag, $closure, $prio, $args);
+                    $this->injectHookableMethod($method, $tag, $hookableClassName, ...$params);
+                }
+
+                continue;
+            }
+
+            // Single method is hooked to filter.
+            $parameters = ! \is_array($parameters) ? [$parameters] : $parameters;
+
+            $this->injectHookableMethod($method, $tag, $hookableClassName, ...$parameters);
+        }
     }
 
-    private function wrapHook(string $hookableClassname, string $hookableClassMethod): \Closure
+    /**
+     * Lazily inject a class method to an action or filter-hook.
+     */
+    private function injectHookableMethod(
+        string $additionMethod,
+        string $tag,
+        string $hookable,
+        string $classMethod,
+        int $priority = 10,
+        int $args = 1
+    ): void {
+        $closure = $this->wrap($hookable, $classMethod);
+
+        if (! \function_exists($additionMethod)) {
+            throw new MissingWordpressFunctionsException($additionMethod);
+        }
+
+        $additionMethod($tag, $closure, $priority, $args);
+    }
+
+    /**
+     * Wraps call to add_action/filter inside a closure, to prevent unnecessary class construction.
+     */
+    private function wrap(string $hookableClassname, string $hookableClassMethod): \Closure
     {
         return function (...$arguments) use ($hookableClassname, $hookableClassMethod) {
             return $this->hookablesContainer->get($hookableClassname)->{$hookableClassMethod}(...$arguments);
         };
+    }
+
+    private function hooksMultipleMethods(array $parameters): bool
+    {
+        return \is_array($parameters[0]);
     }
 }
